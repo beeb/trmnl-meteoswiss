@@ -3,6 +3,7 @@
 <style>
   .charts { display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; width: 100%; }
   .charts--row { flex-direction: row; }
+  .screen--portrait:not(.screen--lg) .charts--row { flex-direction: column; }
   .chart { flex: 4 1 0; min-height: 0; min-width: 0; }
   .chart--secondary { flex-grow: 3; }
   .charts--row .chart--primary { flex-grow: 3; }
@@ -11,10 +12,11 @@
   .forecast .day, .forecast .head { display: flex; align-items: center; gap: 6px; }
   .forecast .name, .forecast .now { font-weight: 700; }
   .forecast img { width: 36px; height: 36px; }
-  .forecast--stacked { font-family: TRMNL16; font-size: 16px; }
-  .forecast--stacked .day { flex-direction: column; gap: 0; }
-  .forecast--stacked .head { gap: 4px; }
-  .forecast--stacked img { width: 24px; height: 24px; }
+  /* stacked days, also used on narrow portrait screens where a single row does not fit */
+  .forecast--stacked, .screen--portrait:not(.screen--lg) .forecast { font-family: TRMNL16; font-size: 16px; }
+  .forecast--stacked .day, .screen--portrait:not(.screen--lg) .forecast .day { flex-direction: column; gap: 0; }
+  .forecast--stacked .head, .screen--portrait:not(.screen--lg) .forecast .head { gap: 4px; }
+  .forecast--stacked img, .screen--portrait:not(.screen--lg) .forecast img { width: 24px; height: 24px; }
   .forecast--small { font-family: TRMNL16; font-size: 16px; }
   .axis-unit { display: flex; align-items: center; gap: 2px; }
   .axis-unit img { width: 20px; height: 20px; }
@@ -66,7 +68,7 @@
   {%- assign margin_left = 60 -%}
   {%- assign margin_right = 60 -%}
 {%- endif -%}
-<div class="layout layout--col" style="gap: 0">
+<div class="layout layout--col gap--none">
   <div class="forecast{% if layout == "vertical" %} forecast--stacked{% elsif compact %} forecast--small{% endif %} w--full">
     {%- for day in forecast limit: forecast_days -%}
       <div class="day">
@@ -692,7 +694,7 @@
           align: 'left',
           formatter: function() {
             const src = this.point.name ? weatherIconUrl(this.point.name) : null;
-            return src ? `<img style="width: {{ icon_size }}px; height: {{ icon_size }}px" src="${src}" />` : '';
+            return src ? `<img width="{{ icon_size }}" height="{{ icon_size }}" src="${src}" />` : '';
           }
         }
       }
