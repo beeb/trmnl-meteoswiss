@@ -226,6 +226,12 @@
     '142': 'night-alt-snow-thunderstorm',
   };
 
+  function iconTag(src, size) {
+    const img = size ? new Image(size, size) : new Image();
+    img.src = src;
+    return img.outerHTML;
+  }
+
   function weatherIconUrl(code) {
     const name = weatherIcons[code];
     return name ? `${ICON_BASE}${name}.svg` : null;
@@ -372,7 +378,7 @@
         ],
         title: {
           {%- if unit_labels -%}
-            text: `<span class="axis-unit"><img src="${ICON_BASE}thermometer.svg" />°C</span>`,
+            text: `<span class="axis-unit">${iconTag(ICON_BASE + 'thermometer.svg')}°C</span>`,
             useHTML: true,
             align: 'high',
             rotation: 0,
@@ -391,7 +397,7 @@
         // Secondary yAxis
         title: {
           {%- if unit_labels -%}
-            text: `<span class="axis-unit"><img src="${ICON_BASE}raindrop.svg" />mm/h</span>`,
+            text: `<span class="axis-unit">${iconTag(ICON_BASE + 'raindrop.svg')}mm/h</span>`,
             useHTML: true,
             align: 'high',
             rotation: 0,
@@ -694,7 +700,7 @@
           align: 'left',
           formatter: function() {
             const src = this.point.name ? weatherIconUrl(this.point.name) : null;
-            return src ? `<img width="{{ icon_size }}" height="{{ icon_size }}" src="${src}" />` : '';
+            return src ? iconTag(src, {{ icon_size }}) : '';
           }
         }
       }
@@ -749,7 +755,7 @@
           gridLineWidth: 0,
           title: {
             {%- if unit_labels -%}
-              text: `<span class="axis-unit"><img src="${ICON_BASE}strong-wind.svg" />km/h</span>`,
+              text: `<span class="axis-unit">${iconTag(ICON_BASE + 'strong-wind.svg')}km/h</span>`,
               useHTML: true,
               align: 'high',
               rotation: 0,
@@ -767,7 +773,7 @@
           // Secondary yAxis
           title: {
             {%- if unit_labels -%}
-              text: `<span class="axis-unit"><img src="${ICON_BASE}day-sunny.svg" />min/h</span>`,
+              text: `<span class="axis-unit">${iconTag(ICON_BASE + 'day-sunny.svg')}min/h</span>`,
               useHTML: true,
               align: 'high',
               rotation: 0,

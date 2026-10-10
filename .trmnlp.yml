@@ -9,6 +9,9 @@ watch:
 # values of custom fields (defined in src/settings.yml)
 custom_fields: {}
 
+# Time zone IANA identifier to inject into trmnl.user
+time_zone: Europe/Zurich
+
 # override variables
 variables:
   trmnl: {}
