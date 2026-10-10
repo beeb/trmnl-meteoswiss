@@ -36,7 +36,7 @@ custom_fields:
   field_type: author_bio
   name: About This Plugin
   category: environment,life
-  description: Detailed MeteoSwiss forecast charts for a Swiss location. Weather data provided by MeteoSwiss.
+  description: Detailed MeteoSwiss forecast charts for a Swiss location. All layouts are supported, the quadrant shows temperature and precipitation only. Weather data provided by MeteoSwiss.
   github_url: https://github.com/beeb/trmnl-meteoswiss
   learn_more_url: https://www.meteoswiss.admin.ch/
 - keyname: plz
@@ -49,7 +49,7 @@ custom_fields:
 - keyname: location_name
   field_type: string
   name: Location name
-  description: Name shown in the title bar
+  description: Name shown in the title bar, it is not looked up so keep it in line with the postal code
   default: Lausanne
 name: MeteoSwiss Charts
 description: MeteoSwiss detailed charts

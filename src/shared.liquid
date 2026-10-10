@@ -8,20 +8,24 @@
   .chart--secondary { flex-grow: 3; }
   .charts--row .chart--primary { flex-grow: 3; }
   .charts--row .chart--secondary { flex-grow: 2; }
-  .forecast { display: flex; flex: none; justify-content: space-around; padding-bottom: 2px; margin-bottom: 6px; border-bottom: 1px dotted black; font-family: TRMNL21; font-size: 21px; white-space: nowrap; }
+  .forecast { display: flex; flex: none; justify-content: space-around; padding-bottom: 2px; margin-bottom: 6px; border-bottom: 1px dotted black; column-gap: 24px; white-space: nowrap; }
   .forecast .day, .forecast .head { display: flex; align-items: center; gap: 6px; }
-  .forecast .name, .forecast .now { font-weight: 700; }
+  .forecast .day[hidden] { display: none; }
+  .trmnl .forecast .title, .trmnl .forecast .label { font-weight: 400; font-variation-settings: "wght" 400; }
+  .trmnl .forecast .name, .trmnl .forecast .now { font-weight: 700; font-variation-settings: "wght" 700; }
   .forecast img { width: 36px; height: 36px; }
   /* stacked days, also used on narrow portrait screens where a single row does not fit */
-  .forecast--stacked, .screen--portrait:not(.screen--lg) .forecast { font-family: TRMNL16; font-size: 16px; }
+  .screen--portrait:not(.screen--lg) .forecast .title { font-family: var(--label-font-family); font-size: var(--label-font-size); line-height: var(--label-line-height); }
   .forecast--stacked .day, .screen--portrait:not(.screen--lg) .forecast .day { flex-direction: column; gap: 0; }
   .forecast--stacked .head, .screen--portrait:not(.screen--lg) .forecast .head { gap: 4px; }
   .forecast--stacked img, .screen--portrait:not(.screen--lg) .forecast img { width: 24px; height: 24px; }
-  .forecast--small { font-family: TRMNL16; font-size: 16px; }
   .axis-unit { display: flex; align-items: center; gap: 2px; }
   .axis-unit img { width: 20px; height: 20px; }
+  .screen--lg .axis-unit img { width: 25px; height: 25px; }
   .forecast--small img { width: 28px; height: 28px; }
-  .trmnl .screen .highcharts-axis-labels text { font-family: TRMNL16 !important; }
+  .screen--lg .forecast img { width: 48px; height: 48px; }
+  .screen--lg .forecast--stacked img, .screen--lg .forecast--small img { width: 36px; height: 36px; }
+  .trmnl .screen .highcharts-axis-labels text { font-family: var(--label-font-family) !important; }
 </style>
 
 {% template meteoswiss %}
@@ -50,10 +54,8 @@
 {%- endif -%}
 {%- if layout == "quadrant" -%}
   {%- assign compact = true -%}
-  {%- assign forecast_days = 2 -%}
 {%- else -%}
   {%- assign compact = false -%}
-  {%- assign forecast_days = 4 -%}
 {%- endif -%}
 {%- if layout == "quadrant" or layout == "vertical" -%}
   {%- assign unit_labels = true -%}
@@ -68,18 +70,23 @@
   {%- assign margin_left = 60 -%}
   {%- assign margin_right = 60 -%}
 {%- endif -%}
+{%- if layout == "vertical" or compact -%}
+  {%- assign text_class = "label lg:label--large" -%}
+{%- else -%}
+  {%- assign text_class = "title lg:title--large" -%}
+{%- endif -%}
 <div class="layout layout--col gap--none">
   <div class="forecast{% if layout == "vertical" %} forecast--stacked{% elsif compact %} forecast--small{% endif %} w--full">
-    {%- for day in forecast limit: forecast_days -%}
+    {%- for day in forecast -%}
       <div class="day">
         <span class="head">
-          <span class="name">{%- if forloop.first -%}Today{%- else -%}{{ day.dayDate | date: '%a' }}{%- endif -%}</span>
+          <span class="name {{ text_class }}">{%- if forloop.first -%}Today{%- else -%}{{ day.dayDate | date: '%a' }}{%- endif -%}</span>
           {%- if forloop.first -%}
-            <span class="now">{{ currentWeather.temperature | round }}°</span>
+            <span class="now {{ text_class }}">{{ currentWeather.temperature | round }}°</span>
           {%- endif -%}
           <img data-code="{{ day.iconDayV2 }}" />
         </span>
-        <span>{{ day.temperatureMin }}°|{{ day.temperatureMax }}°</span>
+        <span class="{{ text_class }}">{{ day.temperatureMin }}°|{{ day.temperatureMax }}°</span>
       </div>
     {%- endfor -%}
   </div>
@@ -242,6 +249,29 @@
     if (src) img.src = src;
   });
 
+  // show as many forecast days as fit the width
+  function fitForecast() {
+    document.querySelectorAll('.forecast').forEach((strip) => {
+      const days = [...strip.children];
+      days.forEach((d) => { d.hidden = false; });
+      while (days.length > 1 && strip.scrollWidth > strip.clientWidth) {
+        days.pop().hidden = true;
+      }
+    });
+  }
+  fitForecast();
+  document.fonts.ready.then(fitForecast);
+  window.addEventListener('load', fitForecast);
+
+  // sizes are stepped up on large screens such as the TRMNL X
+  const chartEl = document.getElementById('{{ chart_id }}');
+  const scale = chartEl.closest('.screen--lg') ? 1.25 : 1;
+  const px = (v) => Math.round(v * scale);
+  // fonts of the framework's type scale for the current device
+  const vars = getComputedStyle(chartEl);
+  const labelFont = vars.getPropertyValue('--label-font-family').trim();
+  const smallFont = vars.getPropertyValue('--label-small-font-family').trim();
+
   const TIMEZONE = '{{ trmnl.user.time_zone_iana | default: "Europe/Zurich" }}';
 
   // dotted lines at local midnights
@@ -265,7 +295,7 @@
     chart: {
       spacing: [4, 0, 4, 0],
       style: {
-        fontFamily: "NicoClean",
+        fontFamily: labelFont,
         fontWeight: 400
       }
     },
@@ -301,8 +331,8 @@
           margin: 4,
         {%- endif -%}
         style: {
-          fontFamily: 'TRMNL12',
-          fontSize: '12px',
+          fontFamily: smallFont,
+          fontSize: `${px(12)}px`,
           whiteSpace: 'nowrap'
         }
       }
@@ -310,6 +340,9 @@
     plotOptions: {
       area: {
         animation: false
+      },
+      line: {
+        lineWidth: px(2)
       }
     }
   });
@@ -324,24 +357,24 @@
       },
       animation: false,
       {%- if unit_labels -%}
-        spacingTop: 24,
+        spacingTop: px(24),
       {%- else -%}
-        spacingTop: 10,
+        spacingTop: px(10),
       {%- endif -%}
-      marginLeft: {{ margin_left }},
-      marginRight: {{ margin_right }}
+      marginLeft: {% if margin_left == "undefined" %}undefined{% else %}px({{ margin_left }}){% endif %},
+      marginRight: {% if margin_right == "undefined" %}undefined{% else %}px({{ margin_right }}){% endif %}
     },
     xAxis: [
       {
         type: 'datetime',
-        tickPixelInterval: {{ tick_px }},
+        tickPixelInterval: px({{ tick_px }}),
         dateTimeLabelFormats: {
           hour: '%[HM]',
           day: '%[eb]'
         },
         labels: {
           style: {
-            fontSize: '16px'
+            fontSize: `${px(16)}px`
           },
           autoRotation: undefined
         },
@@ -354,7 +387,7 @@
         // Primary yAxis
         labels: {
           style: {
-            fontSize: '16px'
+            fontSize: `${px(16)}px`
           }
         },
         alignTicks: false,
@@ -383,8 +416,8 @@
             align: 'high',
             rotation: 0,
             offset: 0,
-            x: {{ 45 | minus: margin_left }},
-            y: -14,
+            x: px({{ 45 | minus: margin_left }}),
+            y: px(-14),
           {%- else -%}
             text: 'Temp. [°C]',
           {%- endif -%}
@@ -402,8 +435,8 @@
             align: 'high',
             rotation: 0,
             offset: 0,
-            x: {{ margin_right | minus: 67 }},
-            y: -14,
+            x: px({{ margin_right | minus: 67 }}),
+            y: px(-14),
           {%- else -%}
             text: {% if layout == "horizontal" %}'Rain [mm/h]'{% else %}'Precip. [mm/h]'{% endif %},
           {%- endif -%}
@@ -416,7 +449,7 @@
         gridLineWidth: 0,
         labels: {
           style: {
-            fontSize: '16px'
+            fontSize: `${px(16)}px`
           }
         },
         opposite: true,
@@ -700,7 +733,7 @@
           align: 'left',
           formatter: function() {
             const src = this.point.name ? weatherIconUrl(this.point.name) : null;
-            return src ? iconTag(src, {{ icon_size }}) : '';
+            return src ? iconTag(src, px({{ icon_size }})) : '';
           }
         }
       }
@@ -717,24 +750,24 @@
         },
         animation: false,
         {%- if unit_labels -%}
-          spacingTop: 24,
+          spacingTop: px(24),
         {%- else -%}
-          spacingTop: 10,
+          spacingTop: px(10),
         {%- endif -%}
-        marginLeft: {{ margin_left }},
-        marginRight: {{ margin_right }},
+        marginLeft: {% if margin_left == "undefined" %}undefined{% else %}px({{ margin_left }}){% endif %},
+        marginRight: {% if margin_right == "undefined" %}undefined{% else %}px({{ margin_right }}){% endif %},
       },
       xAxis: [
         {
           type: 'datetime',
-          tickPixelInterval: {{ tick_px }},
+          tickPixelInterval: px({{ tick_px }}),
           dateTimeLabelFormats: {
             hour: '%[HM]',
             day: '%[eb]'
           },
           labels: {
             style: {
-              fontSize: '16px'
+              fontSize: `${px(16)}px`
             },
             autoRotation: undefined
           },
@@ -747,7 +780,7 @@
           // Primary yAxis
           labels: {
             style: {
-              fontSize: '16px'
+              fontSize: `${px(16)}px`
             }
           },
           alignTicks: false,
@@ -760,8 +793,8 @@
               align: 'high',
               rotation: 0,
               offset: 0,
-              x: {{ 62 | minus: margin_left }},
-              y: -14,
+              x: px({{ 62 | minus: margin_left }}),
+              y: px(-14),
             {%- else -%}
               text: 'Wind [km/h]',
             {%- endif -%}
@@ -778,8 +811,8 @@
               align: 'high',
               rotation: 0,
               offset: 0,
-              x: {{ margin_right | minus: 67 }},
-              y: -14,
+              x: px({{ margin_right | minus: 67 }}),
+              y: px(-14),
             {%- else -%}
               text: 'Sun [min/h]',
             {%- endif -%}
@@ -792,7 +825,7 @@
           gridLineWidth: 0,
           labels: {
             style: {
-              fontSize: '16px'
+              fontSize: `${px(16)}px`
             }
           },
           opposite: true,
