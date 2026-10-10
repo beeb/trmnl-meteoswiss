@@ -7,7 +7,7 @@ your e-ink display.
   <a href="https://trmnl.com/recipes/62668"><img src="https://trmnl.com/images/brand/badges/dark/show-it-on-trmnl/trmnl-badge-show-it-on-dark.svg" alt="Show it on TRMNL" height="80"></a>
 </p>
 
-![MeteoSwiss Charts on a TRMNL device](photo.jpg)
+![MeteoSwiss Charts on a TRMNL device](screenshot.png)
 
 ## Overview
 
