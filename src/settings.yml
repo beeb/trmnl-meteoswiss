@@ -36,7 +36,7 @@ custom_fields:
   field_type: number
   name: Postal code
   description: Swiss postal code (PLZ) of the location, e.g. 1000
-  default: 1000
+  default: 1003
   required: true
 - keyname: location_name
   field_type: string
