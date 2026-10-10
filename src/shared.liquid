@@ -8,7 +8,7 @@
   .chart--secondary { flex-grow: 3; }
   .charts--row .chart--primary { flex-grow: 3; }
   .charts--row .chart--secondary { flex-grow: 2; }
-  .forecast { display: flex; flex: none; justify-content: space-around; padding-bottom: 2px; margin-bottom: 6px; border-bottom: 1px dotted black; column-gap: 24px; white-space: nowrap; }
+  .forecast { display: flex; flex: none; justify-content: space-around; padding-bottom: 2px; margin-bottom: 6px; border-bottom: 1px dotted currentColor; column-gap: 24px; white-space: nowrap; }
   .forecast .day, .forecast .head { display: flex; align-items: center; gap: 6px; }
   .forecast .day[hidden] { display: none; }
   .trmnl .forecast .title, .trmnl .forecast .label { font-weight: 400; font-variation-settings: "wght" 400; }
@@ -106,14 +106,6 @@
 (() => {
   {%- assign now = 'now' | date: '%s' | minus: 3600 | times: 1000 -%}
   {%- assign end = now | plus: chart_duration -%}
-  const fillPatterns = [1, 2, 3, 4, 5, 6].map((n) => ({
-    pattern: {
-      image: `https://trmnl.com/images/grayscale/gray-${n}.png`,
-      width: 12,
-      height: 12
-    }
-  }));
-
   // Weather Icons by Erik Flowers, as hosted by TRMNL
   const ICON_BASE = 'https://trmnl.com/images/plugins/weather/wi-';
 
@@ -233,9 +225,19 @@
     '142': 'night-alt-snow-thunderstorm',
   };
 
-  function iconTag(src, size) {
-    const img = size ? new Image(size, size) : new Image();
+  // takes the ink color of the screen, so it also works in dark mode and themes
+  function adapt(img, src) {
     img.src = src;
+    img.className = 'image--adaptive';
+    img.dataset.adaptive = 'true';
+    img.style.setProperty('--framework-icon-src', `url('${src}')`);
+    return img;
+  }
+
+  function iconTag(src, size) {
+    const img = adapt(size ? new Image(size, size) : new Image(), src);
+    // not accepted by the Highcharts HTML sanitizer
+    img.removeAttribute('data-adaptive');
     return img.outerHTML;
   }
 
@@ -246,7 +248,7 @@
 
   document.querySelectorAll('.forecast img').forEach((img) => {
     const src = weatherIconUrl(img.dataset.code);
-    if (src) img.src = src;
+    if (src) adapt(img, src);
   });
 
   // show as many forecast days as fit the width
@@ -263,24 +265,14 @@
   document.fonts.ready.then(fitForecast);
   window.addEventListener('load', fitForecast);
 
-  // sizes are stepped up on large screens such as the TRMNL X
-  const chartEl = document.getElementById('{{ chart_id }}');
-  const scale = chartEl.closest('.screen--lg') ? 1.25 : 1;
-  const px = (v) => Math.round(v * scale);
-  // fonts of the framework's type scale for the current device
-  const vars = getComputedStyle(chartEl);
-  const labelFont = vars.getPropertyValue('--label-font-family').trim();
-  const smallFont = vars.getPropertyValue('--label-small-font-family').trim();
-
   const TIMEZONE = '{{ trmnl.user.time_zone_iana | default: "Europe/Zurich" }}';
+  Highcharts.setOptions({ time: { timezone: TIMEZONE }, lang: { locale: 'en-GB' } });
 
-  // dotted lines at local midnights
+  // local midnights
   const time = new Highcharts.Time({ timezone: TIMEZONE });
-  const midnightLines = [];
+  const midnights = [];
   for (let t = Math.floor({{ now }} / 3600000) * 3600000; t <= {{ end }}; t += 3600000) {
-    if (time.dateFormat('%H', t) === '00') {
-      midnightLines.push({ value: t, color: 'black', dashStyle: 'Dot' });
-    }
+    if (time.dateFormat('%H', t) === '00') midnights.push(t);
   }
 
   // time of the forecast data, then time the screen was drawn
@@ -288,635 +280,283 @@
   const drawnTime = time.dateFormat('%H:%M', {{ trmnl.system.timestamp_utc | times: 1000 }});
   document.getElementById('{{ freshness_id }}').textContent = `${dataTime} (${drawnTime})`;
 
-  Highcharts.setOptions({
-    time: {
-      timezone: TIMEZONE
-    },
-    chart: {
-      spacing: [4, 0, 4, 0],
-      style: {
-        fontFamily: labelFont,
-        fontWeight: 400
-      }
-    },
-    xAxis: {
-      lineColor: 'black',
+  // 10 minute values first, then hourly ones once the detailed forecast ends
+  const precipitation = [
+    {%- assign last_timestamp = now -%}
+    {%- for p in graph.precipitation10m -%}
+      {%- assign offset = forloop.index0 | times: 600000 -%}
+      {%- assign timestamp = graph.start | plus: offset -%}
+      {%- if timestamp >= now and timestamp <= end -%}
+        [{{ timestamp }}, {{ p }}],
+        {%- assign last_timestamp = timestamp -%}
+      {%- endif -%}
+    {%- endfor -%}
+    {%- for p in graph.precipitation1h -%}
+      {%- assign offset = forloop.index0 | times: 3600000 -%}
+      {%- assign timestamp = graph.startLowResolution | plus: offset -%}
+      {%- if timestamp > last_timestamp and timestamp <= end -%}
+        [{{ timestamp }}, {{ p }}],
+      {%- endif -%}
+    {%- endfor -%}
+  ];
+  const precipitationMax = [
+    {%- assign last_timestamp = now -%}
+    {%- for p in graph.precipitationMax10m -%}
+      {%- assign offset = forloop.index0 | times: 600000 -%}
+      {%- assign timestamp = graph.start | plus: offset -%}
+      {%- if timestamp >= now and timestamp <= end -%}
+        [{{ timestamp }}, {{ p }}],
+        {%- assign last_timestamp = timestamp -%}
+      {%- endif -%}
+    {%- endfor -%}
+    {%- for p in graph.precipitationMax1h -%}
+      {%- assign offset = forloop.index0 | times: 3600000 -%}
+      {%- assign timestamp = graph.startLowResolution | plus: offset -%}
+      {%- if timestamp > last_timestamp and timestamp <= end -%}
+        [{{ timestamp }}, {{ p }}],
+      {%- endif -%}
+    {%- endfor -%}
+  ];
+  // the name is the weather code of the icon shown every third hour
+  const temperature = [
+    {%- for t in graph.temperatureMean1h -%}
+      {%- assign symbolIndex = forloop.index0 | divided_by: 3 -%}
+      {%- assign showSymbol = forloop.index0 | modulo: 3 -%}
+      {%- assign offset = forloop.index0 | times: 3600000 -%}
+      {%- assign timestamp = graph.start | plus: offset -%}
+      {%- if timestamp >= now and timestamp <= end -%}
+        {x: {{ timestamp }}, y: {{ t }}, name: '{%- if showSymbol == 0 -%}{{ graph.weatherIcon3hV2[symbolIndex] }}{%- endif -%}'},
+      {%- endif -%}
+    {%- endfor -%}
+  ];
+  {%- if layout != "quadrant" -%}
+    const sunshine = [
+      {%- for s in graph.sunshine1h -%}
+        {%- assign offset = forloop.index0 | times: 3600000 -%}
+        {%- assign timestamp = graph.start | plus: offset -%}
+        {%- if timestamp >= now and timestamp <= end -%}
+          [{{ timestamp }}, {{ s }}],
+        {%- endif -%}
+      {%- endfor -%}
+    ];
+    const wind = [
+      {%- for w in graph.windSpeed1h -%}
+        {%- assign offset = forloop.index0 | times: 3600000 -%}
+        {%- assign timestamp = graph.start | plus: offset -%}
+        {%- if timestamp >= now and timestamp <= end -%}
+          [{{ timestamp }}, {{ w }}],
+        {%- endif -%}
+      {%- endfor -%}
+    ];
+    const gust = [
+      {%- for g in graph.gustSpeed1h -%}
+        {%- assign offset = forloop.index0 | times: 3600000 -%}
+        {%- assign timestamp = graph.start | plus: offset -%}
+        {%- if timestamp >= now and timestamp <= end -%}
+          [{{ timestamp }}, {{ g }}],
+        {%- endif -%}
+      {%- endfor -%}
+    ];
+  {%- endif -%}
+
+  // precipitation is drawn as stacked bands, darker with the intensity in mm/h
+  const bands = [
+    { max: 1, paint: 'gray-6' },
+    { max: 2, paint: 'gray-5' },
+    { max: 4, paint: 'gray-4' },
+    { max: 6, paint: 'gray-3' },
+    { max: 10, paint: 'gray-2' },
+    { max: Infinity, paint: 'gray-1' }
+  ];
+
+  // options shared by both charts, resolved for the device, mode and theme of the screen
+  function setup(el) {
+    // sizes are stepped up on large screens such as the TRMNL X
+    const lg = document.getElementById(el).closest('.screen--lg') ? 1.25 : 1;
+    const px = (v) => Math.round(TRMNLPaint.px(v * lg, { el }));
+    const ink = TRMNLCharts.paint('black', { el });
+    const label = { ...TRMNLCharts.textStyle('label', { el }), fontSize: `${px(16)}px`, fontWeight: '400', fontVariationSettings: 'normal' };
+    const unit = { ...TRMNLCharts.textStyle('label--small', { el }), fontSize: `${px(12)}px`, whiteSpace: 'nowrap' };
+    const defaults = TRMNLCharts.options({ el });
+
+    // a unit with its icon above the axis on narrow layouts, a rotated title along it otherwise
+    const title = (text, icon, x) => ({
+      {%- if unit_labels -%}
+        text: `<span class="axis-unit">${iconTag(ICON_BASE + icon)}${text}</span>`,
+        useHTML: true,
+        align: 'high',
+        rotation: 0,
+        offset: 0,
+        x: px(x),
+        y: px(-14),
+      {%- else -%}
+        text,
+        {%- if layout == "horizontal" -%}
+          margin: 4,
+        {%- endif -%}
+      {%- endif -%}
+      style: unit
+    });
+    const yAxis = (options) => TRMNLCharts.merge(defaults.yAxis, TRMNLCharts.merge({
+      alignTicks: false,
+      lineWidth: 1,
+      gridLineWidth: 0,
       tickWidth: 1,
       tickLength: 4,
-      tickColor: 'black',
-      labels: {
-        style: {
-          color: 'black',
-          textOverflow: 'none',
-          whiteSpace: 'nowrap'
-        }
-      }
-    },
-    yAxis: {
-      lineColor: 'black',
-      tickWidth: 1,
-      tickLength: 4,
-      tickColor: 'black',
       labels: {
         {%- if layout != "full" -%}
           distance: 6,
         {%- endif -%}
-        style: {
-          color: 'black',
-          textOverflow: 'none'
-        }
-      },
-      title: {
-        {%- if layout == "horizontal" -%}
-          margin: 4,
-        {%- endif -%}
-        style: {
-          fontFamily: smallFont,
-          fontSize: `${px(12)}px`,
-          whiteSpace: 'nowrap'
-        }
+        style: { ...label, textOverflow: 'none' }
       }
-    },
-    plotOptions: {
-      area: {
-        animation: false
-      },
-      line: {
-        lineWidth: px(2)
-      }
-    }
-  });
+    }, options));
 
-  Highcharts.chart('{{ chart_id }}', {
-    lang: {
-      locale: 'en-GB'
-    },
-    chart: {
-      zooming: {
-        type: 'xy'
+    const options = TRMNLCharts.merge(defaults, {
+      chart: {
+        spacing: [{% if unit_labels %}px(24){% else %}px(10){% endif %}, 0, 4, 0],
+        {%- if margin_left != "undefined" -%}
+          marginLeft: px({{ margin_left }}),
+          marginRight: px({{ margin_right }}),
+        {%- endif -%}
+        style: { fontFamily: label.fontFamily }
       },
-      animation: false,
-      {%- if unit_labels -%}
-        spacingTop: px(24),
-      {%- else -%}
-        spacingTop: px(10),
-      {%- endif -%}
-      marginLeft: {% if margin_left == "undefined" %}undefined{% else %}px({{ margin_left }}){% endif %},
-      marginRight: {% if margin_right == "undefined" %}undefined{% else %}px({{ margin_right }}){% endif %}
-    },
-    xAxis: [
-      {
+      xAxis: {
         type: 'datetime',
+        gridLineWidth: 0,
+        tickWidth: 1,
+        tickLength: 4,
         tickPixelInterval: px({{ tick_px }}),
-        dateTimeLabelFormats: {
-          hour: '%[HM]',
-          day: '%[eb]'
-        },
+        dateTimeLabelFormats: { hour: '%[HM]', day: '%[eb]' },
         labels: {
-          style: {
-            fontSize: `${px(16)}px`
-          },
+          style: { ...label, textOverflow: 'none', whiteSpace: 'nowrap' },
           autoRotation: undefined
         },
-        plotLines: midnightLines
-      }
-    ],
-    yAxis: [
-      {
-
-        // Primary yAxis
-        labels: {
-          style: {
-            fontSize: `${px(16)}px`
-          }
-        },
-        alignTicks: false,
-        lineWidth: 1,
-        gridLineWidth: 0,
-        plotLines: [
-          {
-            value: 0,
-            color: 'black',
-            dashStyle: 'Dot'
-          },
-          {
-            value: 20,
-            color: 'black',
-            dashStyle: 'Dot'
-          }, {
-            value: 30,
-            color: 'black',
-            dashStyle: 'Dot'
-          }
-        ],
-        title: {
-          {%- if unit_labels -%}
-            text: `<span class="axis-unit">${iconTag(ICON_BASE + 'thermometer.svg')}°C</span>`,
-            useHTML: true,
-            align: 'high',
-            rotation: 0,
-            offset: 0,
-            x: px({{ 45 | minus: margin_left }}),
-            y: px(-14),
-          {%- else -%}
-            text: 'Temp. [°C]',
-          {%- endif -%}
-          style: {
-            color: 'black'
-          }
-        }
-      }, {
-
-        // Secondary yAxis
-        title: {
-          {%- if unit_labels -%}
-            text: `<span class="axis-unit">${iconTag(ICON_BASE + 'raindrop.svg')}mm/h</span>`,
-            useHTML: true,
-            align: 'high',
-            rotation: 0,
-            offset: 0,
-            x: px({{ margin_right | minus: 67 }}),
-            y: px(-14),
-          {%- else -%}
-            text: {% if layout == "horizontal" %}'Rain [mm/h]'{% else %}'Precip. [mm/h]'{% endif %},
-          {%- endif -%}
-          style: {
-            color: 'black'
-          }
-        },
-        alignTicks: false,
-        lineWidth: 1,
-        gridLineWidth: 0,
-        labels: {
-          style: {
-            fontSize: `${px(16)}px`
-          }
-        },
-        opposite: true,
-        min: 0,
-        minRange: 5
-      }
-    ],
-    tooltip: {
-      shared: true
-    },
-    legend: {
-      align: 'left',
-      verticalAlign: 'top'
-    },
-    title: false,
-    credits: {
-      enabled: false
-    },
-    legend: {
-      enabled: false
-    },
-    plotOptions: {
-      series: {
-        animation: false
-      },
-      line: {
-        marker: {
-          enabled: false
-        }
-      }
-    },
-    series: [
-      {
-        name: 'Precipitation < 1',
-        type: 'area',
-        step: 'left',
-        allowDecimals: true,
-        yAxis: 1,
-        color: fillPatterns[5],
-        lineWidth: 0,
-        zIndex: 6,
-        data: [
-          {%- assign last_timestamp = now -%}
-          {%- for p in graph.precipitation10m -%}
-            {%- assign offset = forloop.index0 | times: 600000 -%}
-            {%- assign timestamp = graph.start | plus: offset -%}
-            {%- if timestamp >= now -%}
-              {%- if timestamp <= end -%}
-                [{{ timestamp }}, {{ p | at_most: 1 }}],
-                {%- assign last_timestamp = timestamp -%}
-              {%- endif -%}
-            {%- endif -%}
-          {%- endfor -%}
-          /* low res */
-          {%- for p in graph.precipitation1h -%}
-            {%- assign offset = forloop.index0 | times: 3600000 -%}
-            {%- assign timestamp = graph.startLowResolution | plus: offset -%}
-            {%- if timestamp > last_timestamp -%}
-              {%- if timestamp <= end -%}
-                [{{ timestamp }}, {{ p | at_most: 1 }}],
-              {%- endif -%}
-            {%- endif -%}
-          {%- endfor -%}
-        ]
-      }, {
-        name: 'Precipitation 1-2',
-        type: 'area',
-        step: 'left',
-        allowDecimals: true,
-        yAxis: 1,
-        color: fillPatterns[4],
-        lineWidth: 0,
-        zIndex: 5,
-        data: [
-          {%- assign last_timestamp = now -%}
-          {%- for p in graph.precipitation10m -%}
-            {%- assign offset = forloop.index0 | times: 600000 -%}
-            {%- assign timestamp = graph.start | plus: offset -%}
-            {%- if timestamp >= now -%}
-              {%- if timestamp <= end -%}
-                [{{ timestamp }}, {{ p | at_most: 2 }}],
-                {%- assign last_timestamp = timestamp -%}
-              {%- endif -%}
-            {%- endif -%}
-          {%- endfor -%}
-          /* low res */
-          {%- for p in graph.precipitation1h -%}
-            {%- assign offset = forloop.index0 | times: 3600000 -%}
-            {%- assign timestamp = graph.startLowResolution | plus: offset -%}
-            {%- if timestamp > last_timestamp -%}
-              {%- if timestamp <= end -%}
-                [{{ timestamp }}, {{ p | at_most: 2 }}],
-              {%- endif -%}
-            {%- endif -%}
-          {%- endfor -%}
-        ]
-      }, {
-        name: 'Precipitation 2-4',
-        type: 'area',
-        step: 'left',
-        allowDecimals: true,
-        yAxis: 1,
-        color: fillPatterns[3],
-        lineWidth: 0,
-        zIndex: 4,
-        data: [
-          {%- assign last_timestamp = now -%}
-          {%- for p in graph.precipitation10m -%}
-            {%- assign offset = forloop.index0 | times: 600000 -%}
-            {%- assign timestamp = graph.start | plus: offset -%}
-            {%- if timestamp >= now -%}
-              {%- if timestamp <= end -%}
-                [{{ timestamp }}, {{ p | at_most: 4 }}],
-                {%- assign last_timestamp = timestamp -%}
-              {%- endif -%}
-            {%- endif -%}
-          {%- endfor -%}
-          /* low res */
-          {%- for p in graph.precipitation1h -%}
-            {%- assign offset = forloop.index0 | times: 3600000 -%}
-            {%- assign timestamp = graph.startLowResolution | plus: offset -%}
-            {%- if timestamp > last_timestamp -%}
-              {%- if timestamp <= end -%}
-                [{{ timestamp }}, {{ p | at_most: 4 }}],
-              {%- endif -%}
-            {%- endif -%}
-          {%- endfor -%}
-        ]
-      }, {
-        name: 'Precipitation 4-6',
-        type: 'area',
-        step: 'left',
-        allowDecimals: true,
-        yAxis: 1,
-        color: fillPatterns[2],
-        lineWidth: 0,
-        zIndex: 3,
-        data: [
-          {%- assign last_timestamp = now -%}
-          {%- for p in graph.precipitation10m -%}
-            {%- assign offset = forloop.index0 | times: 600000 -%}
-            {%- assign timestamp = graph.start | plus: offset -%}
-            {%- if timestamp >= now -%}
-              {%- if timestamp <= end -%}
-                [{{ timestamp }}, {{ p | at_most: 6 }}],
-                {%- assign last_timestamp = timestamp -%}
-              {%- endif -%}
-            {%- endif -%}
-          {%- endfor -%}
-          /* low res */
-          {%- for p in graph.precipitation1h -%}
-            {%- assign offset = forloop.index0 | times: 3600000 -%}
-            {%- assign timestamp = graph.startLowResolution | plus: offset -%}
-            {%- if timestamp > last_timestamp -%}
-              {%- if timestamp <= end -%}
-                [{{ timestamp }}, {{ p | at_most: 6 }}],
-              {%- endif -%}
-            {%- endif -%}
-          {%- endfor -%}
-        ]
-      }, {
-        name: 'Precipitation 6-10',
-        type: 'area',
-        step: 'left',
-        allowDecimals: true,
-        yAxis: 1,
-        color: fillPatterns[1],
-        lineWidth: 0,
-        zIndex: 2,
-        data: [
-          {%- assign last_timestamp = now -%}
-          {%- for p in graph.precipitation10m -%}
-            {%- assign offset = forloop.index0 | times: 600000 -%}
-            {%- assign timestamp = graph.start | plus: offset -%}
-            {%- if timestamp >= now -%}
-              {%- if timestamp <= end -%}
-                [{{ timestamp }}, {{ p | at_most: 10 }}],
-                {%- assign last_timestamp = timestamp -%}
-              {%- endif -%}
-            {%- endif -%}
-          {%- endfor -%}
-          /* low res */
-          {%- for p in graph.precipitation1h -%}
-            {%- assign offset = forloop.index0 | times: 3600000 -%}
-            {%- assign timestamp = graph.startLowResolution | plus: offset -%}
-            {%- if timestamp > last_timestamp -%}
-              {%- if timestamp <= end -%}
-                [{{ timestamp }}, {{ p | at_most: 10 }}],
-              {%- endif -%}
-            {%- endif -%}
-          {%- endfor -%}
-        ]
-      }, {
-        name: 'Precipitation >10',
-        type: 'area',
-        step: 'left',
-        allowDecimals: true,
-        yAxis: 1,
-        color: fillPatterns[0],
-        lineWidth: 1,
-        lineColor: 'black',
-        zIndex: 1,
-        data: [
-          {%- assign last_timestamp = now -%}
-          {%- for p in graph.precipitation10m -%}
-            {%- assign offset = forloop.index0 | times: 600000 -%}
-            {%- assign timestamp = graph.start | plus: offset -%}
-            {%- if timestamp >= now -%}
-              {%- if timestamp <= end -%}
-                [{{ timestamp }}, {{ p }}],
-                {%- assign last_timestamp = timestamp -%}
-              {%- endif -%}
-            {%- endif -%}
-          {%- endfor -%}
-          /* low res */
-          {%- for p in graph.precipitation1h -%}
-            {%- assign offset = forloop.index0 | times: 3600000 -%}
-            {%- assign timestamp = graph.startLowResolution | plus: offset -%}
-            {%- if timestamp > last_timestamp -%}
-              {%- if timestamp <= end -%}
-                [{{ timestamp }}, {{ p }}],
-              {%- endif -%}
-            {%- endif -%}
-          {%- endfor -%}
-        ]
-      }, {
-        name: 'Precipitation outline',
-        type: 'area',
-        step: 'left',
-        allowDecimals: true,
-        yAxis: 1,
-        color: 'transparent',
-        lineWidth: 1,
-        lineColor: 'black',
-        zIndex: 7,
-        data: [
-          {%- assign last_timestamp = now -%}
-          {%- for p in graph.precipitationMax10m -%}
-            {%- assign offset = forloop.index0 | times: 600000 -%}
-            {%- assign timestamp = graph.start | plus: offset -%}
-            {%- if timestamp >= now -%}
-              {%- if timestamp <= end -%}
-                [{{ timestamp }}, {{ p }}],
-                {%- assign last_timestamp = timestamp -%}
-              {%- endif -%}
-            {%- endif -%}
-          {%- endfor -%}
-          /* low res */
-          {%- for p in graph.precipitationMax1h -%}
-            {%- assign offset = forloop.index0 | times: 3600000 -%}
-            {%- assign timestamp = graph.startLowResolution | plus: offset -%}
-            {%- if timestamp > last_timestamp -%}
-              {%- if timestamp <= end -%}
-                [{{ timestamp }}, {{ p }}],
-              {%- endif -%}
-            {%- endif -%}
-          {%- endfor -%}
-        ]
-      }, {
-        name: 'Temperature',
-        type: 'line',
-        color: 'black',
-        zIndex: 8,
-        data: [
-          {%- for t in graph.temperatureMean1h -%}
-            {%- assign symbolIndex = forloop.index0 | divided_by: 3 -%}
-            {%- assign showSymbol = forloop.index0 | modulo: 3 -%}
-            {%- assign offset = forloop.index0 | times: 3600000 -%}
-            {%- assign timestamp = graph.start | plus: offset -%}
-            {%- if timestamp >= now -%}
-              {%- if timestamp <= end -%}
-                {x: {{ timestamp }}, y: {{ t }}, name: '{%- if showSymbol == 0 -%}{{ graph.weatherIcon3hV2[symbolIndex] }}{%- endif -%}'},
-              {%- endif -%}
-            {%- endif -%}
-          {%- endfor -%}
-        ],
-        dataLabels: {
-          enabled: true,
-          useHTML: true,
-          y: -10000,
-          align: 'left',
-          formatter: function() {
-            const src = this.point.name ? weatherIconUrl(this.point.name) : null;
-            return src ? iconTag(src, px({{ icon_size }})) : '';
-          }
-        }
-      }
-    ]
-  });
-  {%- if layout != "quadrant" -%}
-    Highcharts.chart('{{ chart2_id }}', {
-      lang: {
-        locale: 'en-GB'
-      },
-      chart: {
-        zooming: {
-          type: 'xy'
-        },
-        animation: false,
-        {%- if unit_labels -%}
-          spacingTop: px(24),
-        {%- else -%}
-          spacingTop: px(10),
-        {%- endif -%}
-        marginLeft: {% if margin_left == "undefined" %}undefined{% else %}px({{ margin_left }}){% endif %},
-        marginRight: {% if margin_right == "undefined" %}undefined{% else %}px({{ margin_right }}){% endif %},
-      },
-      xAxis: [
-        {
-          type: 'datetime',
-          tickPixelInterval: px({{ tick_px }}),
-          dateTimeLabelFormats: {
-            hour: '%[HM]',
-            day: '%[eb]'
-          },
-          labels: {
-            style: {
-              fontSize: `${px(16)}px`
-            },
-            autoRotation: undefined
-          },
-          plotLines: midnightLines
-        }
-      ],
-      yAxis: [
-        {
-
-          // Primary yAxis
-          labels: {
-            style: {
-              fontSize: `${px(16)}px`
-            }
-          },
-          alignTicks: false,
-          lineWidth: 1,
-          gridLineWidth: 0,
-          title: {
-            {%- if unit_labels -%}
-              text: `<span class="axis-unit">${iconTag(ICON_BASE + 'strong-wind.svg')}km/h</span>`,
-              useHTML: true,
-              align: 'high',
-              rotation: 0,
-              offset: 0,
-              x: px({{ 62 | minus: margin_left }}),
-              y: px(-14),
-            {%- else -%}
-              text: 'Wind [km/h]',
-            {%- endif -%}
-            style: {
-              color: 'black'
-            }
-          }
-        }, {
-          // Secondary yAxis
-          title: {
-            {%- if unit_labels -%}
-              text: `<span class="axis-unit">${iconTag(ICON_BASE + 'day-sunny.svg')}min/h</span>`,
-              useHTML: true,
-              align: 'high',
-              rotation: 0,
-              offset: 0,
-              x: px({{ margin_right | minus: 67 }}),
-              y: px(-14),
-            {%- else -%}
-              text: 'Sun [min/h]',
-            {%- endif -%}
-            style: {
-              color: 'black'
-            }
-          },
-          alignTicks: false,
-          lineWidth: 1,
-          gridLineWidth: 0,
-          labels: {
-            style: {
-              fontSize: `${px(16)}px`
-            }
-          },
-          opposite: true,
-          tickInterval: 15,
-          min: 0,
-          max: 60
-        }
-      ],
-      tooltip: {
-        shared: true
-      },
-      legend: {
-        align: 'left',
-        verticalAlign: 'top'
-      },
-      title: false,
-      credits: {
-        enabled: false
-      },
-      legend: {
-        enabled: false
+        plotLines: midnights.map((value) => ({ value, color: ink, dashStyle: 'Dot' }))
       },
       plotOptions: {
-        series: {
-          animation: false
-        },
-        line: {
-          marker: {
-            enabled: false
-          }
-        }
-      },
-      series: [
-        {
-          name: 'Sunshine',
-          type: 'area',
-          step: 'left',
-          allowDecimals: true,
-          yAxis: 1,
-          color: fillPatterns[4],
-          lineWidth: 1,
-          lineColor: 'black',
-          marker: false,
-          zIndex: 1,
-          data: [
-            {%- for s in graph.sunshine1h -%}
-              {%- assign offset = forloop.index0 | times: 3600000 -%}
-              {%- assign timestamp = graph.start | plus: offset -%}
-              {%- if timestamp >= now -%}
-                {%- if timestamp <= end -%}
-                  [{{ timestamp }}, {{ s }}],
-                {%- endif -%}
-              {%- endif -%}
-            {%- endfor -%}
-          ]
-        }, {
-          name: 'Wind',
-          type: 'line',
-          color: 'black',
-          zIndex: 3,
-          data: [
-            {%- for w in graph.windSpeed1h -%}
-              {%- assign offset = forloop.index0 | times: 3600000 -%}
-              {%- assign timestamp = graph.start | plus: offset -%}
-              {%- if timestamp >= now -%}
-                {%- if timestamp <= end -%}
-                  [{{ timestamp }}, {{ w }}],
-                {%- endif -%}
-              {%- endif -%}
-            {%- endfor -%}
-          ]
-        }, {
-          name: 'Gust',
-          type: 'line',
-          color: '#666666',
-          zIndex: 2,
-          data: [
-            {%- for g in graph.gustSpeed1h -%}
-              {%- assign offset = forloop.index0 | times: 3600000 -%}
-              {%- assign timestamp = graph.start | plus: offset -%}
-              {%- if timestamp >= now -%}
-                {%- if timestamp <= end -%}
-                  [{{ timestamp }}, {{ g }}],
-                {%- endif -%}
-              {%- endif -%}
-            {%- endfor -%}
-          ]
-        }
-      ]
+        series: { animation: false },
+        line: { lineWidth: px(2) },
+        area: { step: 'left' }
+      }
     });
-  {%- endif -%}
+    return { px, ink, title, yAxis, options };
+  }
+
+  // the framework's chart helper is part of the plugin runtime, which loads after this script
+  function whenReady(cb) {
+    let tries = 0;
+    (function attempt() {
+      if (window.TRMNLCharts && window.TRMNLPaint) return cb();
+      if (++tries > 200) return;
+      setTimeout(attempt, 50);
+    })();
+  }
+
+  whenReady(() => {
+    TRMNLCharts.watch('{{ chart_id }}', () => {
+      const el = '{{ chart_id }}';
+      const { px, ink, title, yAxis, options } = setup(el);
+      return Highcharts.chart(el, TRMNLCharts.merge(options, {
+        yAxis: [
+          yAxis({
+            plotLines: [0, 20, 30].map((value) => ({ value, color: ink, dashStyle: 'Dot' })),
+            title: title({% if unit_labels %}'°C', 'thermometer.svg', {{ 45 | minus: margin_left }}{% else %}'Temp. [°C]'{% endif %})
+          }),
+          yAxis({
+            title: title({% if unit_labels %}'mm/h', 'raindrop.svg', {{ margin_right | minus: 67 }}{% elsif layout == "horizontal" %}'Rain [mm/h]'{% else %}'Precip. [mm/h]'{% endif %}),
+            opposite: true,
+            min: 0,
+            minRange: 5
+          })
+        ],
+        series: [
+          ...bands.map((band, i) => ({
+            name: `Precipitation up to ${band.max}`,
+            type: 'area',
+            yAxis: 1,
+            color: TRMNLCharts.paint(band.paint, { el }),
+            lineWidth: band.max === Infinity ? 1 : 0,
+            lineColor: ink,
+            zIndex: bands.length - i,
+            data: precipitation.map(([t, p]) => [t, Math.min(p, band.max)])
+          })),
+          {
+            name: 'Precipitation outline',
+            type: 'area',
+            yAxis: 1,
+            color: 'transparent',
+            lineWidth: 1,
+            lineColor: ink,
+            zIndex: 7,
+            data: precipitationMax
+          }, {
+            name: 'Temperature',
+            type: 'line',
+            color: ink,
+            zIndex: 8,
+            data: temperature,
+            dataLabels: {
+              enabled: true,
+              useHTML: true,
+              y: -10000,
+              align: 'left',
+              formatter: function() {
+                const src = this.point.name ? weatherIconUrl(this.point.name) : null;
+                return src ? iconTag(src, px({{ icon_size }})) : '';
+              }
+            }
+          }
+        ]
+      }));
+    });
+    {%- if layout != "quadrant" -%}
+      TRMNLCharts.watch('{{ chart2_id }}', () => {
+        const el = '{{ chart2_id }}';
+        const { ink, title, yAxis, options } = setup(el);
+        const gray = TRMNLCharts.paint('gray-3', { el });
+        // a patterned stroke is unreadable, fall back to a thin ink line
+        const gustLine = typeof gray === 'string' ? { color: gray } : { color: ink, lineWidth: 1 };
+        return Highcharts.chart(el, TRMNLCharts.merge(options, {
+          yAxis: [
+            yAxis({
+              title: title({% if unit_labels %}'km/h', 'strong-wind.svg', {{ 62 | minus: margin_left }}{% else %}'Wind [km/h]'{% endif %})
+            }),
+            yAxis({
+              title: title({% if unit_labels %}'min/h', 'day-sunny.svg', {{ margin_right | minus: 67 }}{% else %}'Sun [min/h]'{% endif %}),
+              opposite: true,
+              tickInterval: 15,
+              min: 0,
+              max: 60
+            })
+          ],
+          series: [
+            {
+              name: 'Sunshine',
+              type: 'area',
+              yAxis: 1,
+              color: TRMNLCharts.paint('gray-5', { el }),
+              lineWidth: 1,
+              lineColor: ink,
+              zIndex: 1,
+              data: sunshine
+            }, {
+              name: 'Wind',
+              type: 'line',
+              color: ink,
+              zIndex: 3,
+              data: wind
+            }, {
+              name: 'Gust',
+              type: 'line',
+              ...gustLine,
+              zIndex: 2,
+              data: gust
+            }
+          ]
+        }));
+      });
+    {%- endif -%}
+  });
 })();
 </script>
 {% endtemplate %}
