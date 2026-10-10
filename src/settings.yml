@@ -32,18 +32,25 @@ oauth_expiry_field_name: ''
 oauth_expiry_strategy: ''
 oauth_fixed_expiry_ms: ''
 custom_fields:
+- keyname: author_bio
+  field_type: author_bio
+  name: About This Plugin
+  category: environment,life
+  description: Detailed MeteoSwiss forecast charts for a Swiss location. Weather data provided by MeteoSwiss.
+  github_url: https://github.com/beeb/trmnl-meteoswiss
+  learn_more_url: https://www.meteoswiss.admin.ch/
 - keyname: plz
   field_type: number
   name: Postal code
-  description: Swiss postal code (PLZ) of the location, e.g. 1000
+  description: Swiss postal code (PLZ) of the location, e.g. 1003
   default: 1003
-  required: true
+  min: 1000
+  max: 9999
 - keyname: location_name
   field_type: string
   name: Location name
   description: Name shown in the title bar
   default: Lausanne
-  required: true
 name: MeteoSwiss Charts
-description: MeteoSwiss detailled charts
+description: MeteoSwiss detailed charts
 refresh_interval: 15

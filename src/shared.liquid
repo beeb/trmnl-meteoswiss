@@ -4,9 +4,9 @@
   .charts { display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; width: 100%; }
   .charts--row { flex-direction: row; }
   .chart { flex: 4 1 0; min-height: 0; min-width: 0; }
-  #container2 { flex-grow: 3; }
-  .charts--row #container { flex-grow: 3; }
-  .charts--row #container2 { flex-grow: 2; }
+  .chart--secondary { flex-grow: 3; }
+  .charts--row .chart--primary { flex-grow: 3; }
+  .charts--row .chart--secondary { flex-grow: 2; }
   .forecast { display: flex; flex: none; justify-content: space-around; padding-bottom: 2px; margin-bottom: 6px; border-bottom: 1px dotted black; font-family: TRMNL21; font-size: 21px; white-space: nowrap; }
   .forecast .day, .forecast .head { display: flex; align-items: center; gap: 6px; }
   .forecast .name, .forecast .now { font-weight: 700; }
@@ -23,6 +23,9 @@
 </style>
 
 {% template meteoswiss %}
+{%- assign chart_id = "chart-" | append_random -%}
+{%- assign chart2_id = "chart-" | append_random -%}
+{%- assign freshness_id = "freshness-" | append_random -%}
 {%- if layout == "full" -%}
   {%- assign icon_size = 36 -%}
   {%- assign chart_duration = 129600000  -%}
@@ -79,18 +82,19 @@
     {%- endfor -%}
   </div>
   <div class="charts{% if layout == "horizontal" %} charts--row{% endif %}">
-    <div id="container" class="chart"></div>
+    <div id="{{ chart_id }}" class="chart chart--primary"></div>
     {%- if layout != "quadrant" -%}
-      <div id="container2" class="chart"></div>
+      <div id="{{ chart2_id }}" class="chart chart--secondary"></div>
     {%- endif -%}
   </div>
 </div>
 
 <div class="title_bar">
   <span class="title">MeteoSwiss · {{ trmnl.plugin_settings.custom_fields_values.location_name }}</span>
-  <span class="instance" id="freshness"></span>
+  <span class="instance" id="{{ freshness_id }}"></span>
 </div>
 <script>
+(() => {
   {%- assign now = 'now' | date: '%s' | minus: 3600 | times: 1000 -%}
   {%- assign end = now | plus: chart_duration -%}
   const fillPatterns = [1, 2, 3, 4, 5, 6].map((n) => ({
@@ -244,7 +248,7 @@
   // time of the forecast data, then time the screen was drawn
   const dataTime = time.dateFormat('%H:%M', {{ currentWeather.time }});
   const drawnTime = time.dateFormat('%H:%M', {{ trmnl.system.timestamp_utc | times: 1000 }});
-  document.getElementById('freshness').textContent = `${dataTime} (${drawnTime})`;
+  document.getElementById('{{ freshness_id }}').textContent = `${dataTime} (${drawnTime})`;
 
   Highcharts.setOptions({
     time: {
@@ -302,7 +306,7 @@
     }
   });
 
-  Highcharts.chart('container', {
+  Highcharts.chart('{{ chart_id }}', {
     lang: {
       locale: 'en-GB'
     },
@@ -695,7 +699,7 @@
     ]
   });
   {%- if layout != "quadrant" -%}
-    Highcharts.chart('container2', {
+    Highcharts.chart('{{ chart2_id }}', {
       lang: {
         locale: 'en-GB'
       },
@@ -872,5 +876,6 @@
       ]
     });
   {%- endif -%}
+})();
 </script>
 {% endtemplate %}
