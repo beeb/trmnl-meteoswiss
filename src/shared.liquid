@@ -8,23 +8,7 @@
   .chart--secondary { flex-grow: 3; }
   .charts--row .chart--primary { flex-grow: 3; }
   .charts--row .chart--secondary { flex-grow: 2; }
-  .forecast { display: flex; flex: none; justify-content: space-around; padding-bottom: 2px; margin-bottom: 6px; border-bottom: 1px dotted currentColor; column-gap: 24px; white-space: nowrap; }
-  .forecast .day, .forecast .head { display: flex; align-items: center; gap: 6px; }
-  .forecast .day[hidden] { display: none; }
-  .trmnl .forecast .title, .trmnl .forecast .label { font-weight: 400; font-variation-settings: "wght" 400; }
-  .trmnl .forecast .name, .trmnl .forecast .now { font-weight: 700; font-variation-settings: "wght" 700; }
-  .forecast img { width: 36px; height: 36px; }
-  /* stacked days, also used on narrow portrait screens where a single row does not fit */
-  .screen--portrait:not(.screen--lg) .forecast .title { font-family: var(--label-font-family); font-size: var(--label-font-size); line-height: var(--label-line-height); }
-  .forecast--stacked .day, .screen--portrait:not(.screen--lg) .forecast .day { flex-direction: column; gap: 0; }
-  .forecast--stacked .head, .screen--portrait:not(.screen--lg) .forecast .head { gap: 4px; }
-  .forecast--stacked img, .screen--portrait:not(.screen--lg) .forecast img { width: 24px; height: 24px; }
-  .axis-unit { display: flex; align-items: center; gap: 2px; }
-  .axis-unit img { width: 20px; height: 20px; }
-  .screen--lg .axis-unit img { width: 25px; height: 25px; }
-  .forecast--small img { width: 28px; height: 28px; }
-  .screen--lg .forecast img { width: 48px; height: 48px; }
-  .screen--lg .forecast--stacked img, .screen--lg .forecast--small img { width: 36px; height: 36px; }
+  .forecast { border-bottom: 1px dotted currentColor; white-space: nowrap; }
   .trmnl .screen .highcharts-axis-labels text { font-family: var(--label-font-family) !important; }
 </style>
 
@@ -73,20 +57,34 @@
 {%- if layout == "vertical" or compact -%}
   {%- assign text_class = "label lg:label--large" -%}
 {%- else -%}
-  {%- assign text_class = "title lg:title--large" -%}
+  {%- assign text_class = "title lg:title--large portrait:label--base lg:portrait:title--large" -%}
+{%- endif -%}
+{%- comment -%} narrow portrait screens stack the days like the vertical layout {%- endcomment -%}
+{%- if layout == "vertical" -%}
+  {%- assign day_class = "flex flex--col gap--none" -%}
+  {%- assign head_class = "gap--[4px]" -%}
+  {%- assign img_class = "w--6 h--6 lg:w--9 lg:h--9" -%}
+{%- else -%}
+  {%- assign day_class = "flex flex--row gap--xsmall portrait:flex--col portrait:gap--none lg:portrait:flex--row lg:portrait:gap--xsmall" -%}
+  {%- assign head_class = "gap--xsmall" -%}
+  {%- if compact -%}
+    {%- assign img_class = "w--7 h--7 portrait:w--6 portrait:h--6 lg:w--9 lg:h--9 lg:portrait:w--9 lg:portrait:h--9" -%}
+  {%- else -%}
+    {%- assign img_class = "w--9 h--9 portrait:w--6 portrait:h--6 lg:w--12 lg:h--12 lg:portrait:w--12 lg:portrait:h--12" -%}
+  {%- endif -%}
 {%- endif -%}
 <div class="layout layout--col gap--none">
-  <div class="forecast{% if layout == "vertical" %} forecast--stacked{% elsif compact %} forecast--small{% endif %} w--full">
+  <div class="forecast flex flex--row flex--around gap--[24px] pb--1 mb--1 w--full">
     {%- for day in forecast -%}
-      <div class="day">
-        <span class="head">
-          <span class="name {{ text_class }}">{%- if forloop.first -%}Today{%- else -%}{{ day.dayDate | date: '%a' }}{%- endif -%}</span>
+      <div class="{{ day_class }}">
+        <span class="flex flex--row {{ head_class }}">
+          <span class="{{ text_class }} font--bold">{%- if forloop.first -%}Today{%- else -%}{{ day.dayDate | date: '%a' }}{%- endif -%}</span>
           {%- if forloop.first -%}
-            <span class="now {{ text_class }}">{{ currentWeather.temperature | round }}°</span>
+            <span class="{{ text_class }} font--bold">{{ currentWeather.temperature | round }}°</span>
           {%- endif -%}
-          <img data-code="{{ day.iconDayV2 }}" />
+          <img class="{{ img_class }}" data-code="{{ day.iconDayV2 }}" />
         </span>
-        <span class="{{ text_class }}">{{ day.temperatureMin }}°|{{ day.temperatureMax }}°</span>
+        <span class="{{ text_class }} font--regular">{{ day.temperatureMin }}°|{{ day.temperatureMax }}°</span>
       </div>
     {%- endfor -%}
   </div>
@@ -228,7 +226,7 @@
   // takes the ink color of the screen, so it also works in dark mode and themes
   function adapt(img, src) {
     img.src = src;
-    img.className = 'image--adaptive';
+    img.classList.add('image--adaptive');
     img.dataset.adaptive = 'true';
     img.style.setProperty('--framework-icon-src', `url('${src}')`);
     return img;
@@ -255,9 +253,9 @@
   function fitForecast() {
     document.querySelectorAll('.forecast').forEach((strip) => {
       const days = [...strip.children];
-      days.forEach((d) => { d.hidden = false; });
+      days.forEach((d) => d.classList.remove('hidden'));
       while (days.length > 1 && strip.scrollWidth > strip.clientWidth) {
-        days.pop().hidden = true;
+        days.pop().classList.add('hidden');
       }
     });
   }
@@ -382,7 +380,7 @@
     // a unit with its icon above the axis on narrow layouts, a rotated title along it otherwise
     const title = (text, icon, x) => ({
       {%- if unit_labels -%}
-        text: `<span class="axis-unit">${iconTag(ICON_BASE + icon)}${text}</span>`,
+        text: `<span class="flex flex--row gap--[2px]">${iconTag(ICON_BASE + icon, px(20))}${text}</span>`,
         useHTML: true,
         align: 'high',
         rotation: 0,
