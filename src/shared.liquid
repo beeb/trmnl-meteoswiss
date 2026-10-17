@@ -1,14 +1,11 @@
 <script src="https://trmnl.com/js/highcharts/12.3.0/highcharts.js"></script>
 <script src="https://trmnl.com/js/highcharts/12.3.0/pattern-fill.js"></script>
 <style>
-  .charts { display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; width: 100%; }
-  .charts--row { flex-direction: row; }
-  .screen--portrait:not(.screen--lg) .charts--row { flex-direction: column; }
-  .chart { flex: 4 1 0; min-height: 0; min-width: 0; }
+  .chart--primary { flex-grow: 4; }
   .chart--secondary { flex-grow: 3; }
   .charts--row .chart--primary { flex-grow: 3; }
   .charts--row .chart--secondary { flex-grow: 2; }
-  .forecast { border-bottom: 1px dotted currentColor; white-space: nowrap; }
+  .forecast { white-space: nowrap; }
   .trmnl .screen .highcharts-axis-labels text { font-family: var(--label-font-family) !important; }
 </style>
 
@@ -74,7 +71,7 @@
   {%- endif -%}
 {%- endif -%}
 <div class="layout layout--col gap--none">
-  <div class="forecast flex flex--row flex--around gap--[24px] pb--1 mb--1 w--full">
+  <div class="forecast flex flex--row flex--around gap--[24px] pb--1 mb--1 w--full border--h-40">
     {%- for day in forecast -%}
       <div class="{{ day_class }}">
         <span class="flex flex--row {{ head_class }}">
@@ -88,10 +85,10 @@
       </div>
     {%- endfor -%}
   </div>
-  <div class="charts{% if layout == "horizontal" %} charts--row{% endif %}">
-    <div id="{{ chart_id }}" class="chart chart--primary"></div>
+  <div class="flex {% if layout == "horizontal" %}charts--row flex--row portrait:flex--col lg:portrait:flex--row{% else %}flex--col{% endif %} flex--stretch gap--none grow basis--0 h--min-0 w--full">
+    <div id="{{ chart_id }}" class="chart--primary h--min-0 w--min-0"></div>
     {%- if layout != "quadrant" -%}
-      <div id="{{ chart2_id }}" class="chart chart--secondary"></div>
+      <div id="{{ chart2_id }}" class="chart--secondary h--min-0 w--min-0"></div>
     {%- endif -%}
   </div>
 </div>
@@ -390,7 +387,7 @@
       {%- else -%}
         text,
         {%- if layout == "horizontal" -%}
-          margin: 4,
+          margin: px(8),
         {%- endif -%}
       {%- endif -%}
       style: unit
